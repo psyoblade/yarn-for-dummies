@@ -1,0 +1,123 @@
+buildscript {
+    repositories {
+        mavenCentral()
+    }
+
+    dependencies {
+    }
+}
+
+plugins {
+    id 'java'
+}
+
+ext {
+    projectGroup = 'me.suhyuk.yarn'
+    projectName = 'hello-world'
+    projectVersion = 'v1'
+
+    sourceCompatibility = '1.8'
+    targetCompatibility = '1.8'
+
+    hadoopVersion = '3.1.2'
+}
+
+project.group = projectGroup
+project.version = projectVersion
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation group: 'org.apache.hadoop', name: 'hadoop-client', version: hadoopVersion
+    implementation group: 'org.apache.hadoop', name: 'hadoop-yarn-common', version: hadoopVersion
+    implementation group: 'org.apache.hadoop', name: 'hadoop-yarn-client', version: hadoopVersion
+    testImplementation 'org.junit.jupiter:junit-jupiter-api:5.7.0'
+    testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.7.0'
+}
+
+/**
+task("listCompileClasspath") {
+    doLast {
+        configurations.compileClasspath.each { File file -> println(file.name) }
+    }
+}
+
+task("listDepJars") {
+    doLast {
+        configurations.implementation.setCanBeResolved(true)
+        configurations.implementation.each { File file -> println(file.name) }
+    }
+}
+
+task copyDepJars(type: Copy, dependsOn: ["listDepJars"]) {
+    doLast {
+        println "copy into $buildDir/dependencies/libs"
+    }
+    configurations.implementation.setCanBeResolved(true)
+    from configurations.implementation
+    into "$buildDir/dependencies/libs"
+}
+
+task copyCompileClasspath(type: Copy) {
+    doFirst {
+        configurations.compileClasspath.each { File file -> println file.name }
+    }
+    from configurations.compileClasspath
+    into "$buildDir/dependencies/compile"
+}
+
+
+task copyRuntimeClasspath(type: Copy) {
+    doFirst {
+        configurations.runtimeClasspath.each { File file -> println file.name }
+    }
+    from configurations.runtimeClasspath
+    into "$buildDir/dependencies/runtime"
+}
+
+task dist(type: Copy, dependsOn: [ "build", "listCompileClasspath" ]) {
+    from configurations.runtimeClasspath
+    into "$buildDir/libs"
+}
+*/
+
+jar {
+    duplicatesStrategy = DuplicatesStrategy.INCLUDE
+    manifest {
+        attributes "Main-Class": "me.suhyuk.yarn.helloworld.v1.HelloWorld"
+    }
+    from {
+        configurations.compileClasspath.collect { it.isDirectory() ? it : zipTree(it) }
+    }
+}
+
+task("debugJarName") {
+    doLast {
+        println jar.archiveName
+    }
+}
+
+/**
+task("listRuntimeClasspath") {
+    doLast {
+        configurations.runtimeClasspath.each { File file -> println(file.name) }
+    }
+}
+
+task uberJar(type: Jar, dependsOn: ["listRuntimeClasspath"]) {
+
+    archiveClassifier = 'uber'
+    from sourceSets.main.output
+    dependsOn configurations.runtimeClasspath
+    manifest {
+        attributes "Main-Class": "me.suhyuk.yarn.helloworld.v1.HelloWorld"
+    }
+    duplicatesStrategy = DuplicatesStrategy.INCLUDE
+    from {
+        configurations.runtimeClasspath.findAll { it.name.endsWith('jar') }.collect { zipTree(it) }
+
+    }
+}
+*/
