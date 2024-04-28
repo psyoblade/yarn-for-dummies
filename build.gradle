@@ -1,12 +1,3 @@
-buildscript {
-    repositories {
-        mavenCentral()
-    }
-
-    dependencies {
-    }
-}
-
 plugins {
     id 'java'
 }
@@ -25,16 +16,46 @@ ext {
 project.group = projectGroup
 project.version = projectVersion
 
-repositories {
-    mavenCentral()
+allprojects {
+    repositories {
+        mavenCentral()
+    }
 }
 
-dependencies {
-    implementation group: 'org.apache.hadoop', name: 'hadoop-client', version: hadoopVersion
-    implementation group: 'org.apache.hadoop', name: 'hadoop-yarn-common', version: hadoopVersion
-    implementation group: 'org.apache.hadoop', name: 'hadoop-yarn-client', version: hadoopVersion
-    testImplementation 'org.junit.jupiter:junit-jupiter-api:5.7.0'
-    testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.7.0'
+subprojects {
+    apply plugin: 'java'
+
+    dependencies {
+//        testImplementation 'junit:junit:4.13.1'
+    }
+}
+
+project(':hello-world-v1') {
+
+    dependencies {
+        implementation group: 'org.apache.hadoop', name: 'hadoop-client', version: hadoopVersion
+        implementation group: 'org.apache.hadoop', name: 'hadoop-yarn-common', version: hadoopVersion
+        implementation group: 'org.apache.hadoop', name: 'hadoop-yarn-client', version: hadoopVersion
+        testImplementation 'org.junit.jupiter:junit-jupiter-api:5.7.0'
+        testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.7.0'
+    }
+
+    jar {
+        duplicatesStrategy = DuplicatesStrategy.INCLUDE
+        manifest {
+            attributes "Main-Class": "me.suhyuk.yarn.helloworld.v1.HelloWorld"
+        }
+        from {
+            configurations.compileClasspath.collect { it.isDirectory() ? it : zipTree(it) }
+        }
+    }
+
+    task("debugJarName") {
+        doLast {
+            println jar.getArchiveFileName()
+        }
+    }
+
 }
 
 /**
@@ -83,21 +104,6 @@ task dist(type: Copy, dependsOn: [ "build", "listCompileClasspath" ]) {
 }
 */
 
-jar {
-    duplicatesStrategy = DuplicatesStrategy.INCLUDE
-    manifest {
-        attributes "Main-Class": "me.suhyuk.yarn.helloworld.v1.HelloWorld"
-    }
-    from {
-        configurations.compileClasspath.collect { it.isDirectory() ? it : zipTree(it) }
-    }
-}
-
-task("debugJarName") {
-    doLast {
-        println jar.archiveName
-    }
-}
 
 /**
 task("listRuntimeClasspath") {
