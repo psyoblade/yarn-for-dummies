@@ -41,7 +41,7 @@ public class HelloWorldClient {
     private ApplicationId applicationId;
 
     private String appMasterJar = "";
-    private String appMasterJarPath = "yarn-for-dummies-v1.jar";
+    private String appMasterJarPath = "hello-world-v1.jar";
     private String log4jJar = "";
     private String log4jJarPath = "log4j.properties";
 

@@ -1,2 +1,3 @@
 rootProject.name = 'yarn-for-dummies'
+include 'hello-world-v1'
 
