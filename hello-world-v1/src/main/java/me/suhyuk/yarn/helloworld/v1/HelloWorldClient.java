@@ -57,6 +57,14 @@ public class HelloWorldClient {
         log4jJar = workDir + File.separator + log4jJarPath;
     }
 
+    /**
+     * yarnClient 를 통해서 수행할 작업을 submit 합니다
+     * - 실행을 위한 명령어 및 환경변수는 ApplicationSubmissionContext 객체에 담아서 전달하며
+     * - 실행에 필요한 파일은 하둡에 업로드하고
+     *
+     * @throws IOException
+     * @throws YarnException
+     */
     public void run() throws IOException, YarnException {
 
         try (YarnClient yarnClient = YarnClient.createYarnClient()) { // init yarn-client

@@ -10,8 +10,22 @@
 # cat deploy.sh
 docker-compose up -d
 
+# build & deploy jar
+sbin/deploy_yarn_app.sh hello-world-v1 true
+
+# custom build & deploy
 ./gradlew clean build
 docker cp build/libs/hello-world-v1.jar datanode:/
 docker cp build/resources/main/log4j.properties datanode:/
 docker-compose exec datanode hadoop jar ./hello-world-v1.jar .
+```
+
+### Debugging on http://resourcemanager:8088/cluster
+```bash
+# cat /etc/hosts or C:\Windows\System32\drivers\etc\hosts
+127.0.0.1	nodemanager
+127.0.0.1	resourcemanager
+127.0.0.1	namenode
+127.0.0.1	datanode
+127.0.0.1	historyserver
 ```
