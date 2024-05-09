@@ -1,5 +1,6 @@
-package me.suhyuk.yarn.helloworld.v1;
+package me.suhyuk.yarn.helloworld.client;
 
+import me.suhyuk.yarn.helloworld.appmaster.HelloWorldAppMaster;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileStatus;
@@ -25,10 +26,10 @@ import java.util.*;
 public class HelloWorldClient {
 
     private static final Logger LOG = Logger.getLogger(HelloWorldClient.class);
-    private static final String appName = "hello-world-client-v1";
+    private static final String appName = "hello-world-client";
 
     // am related settings
-    private static final String amClassName = "me.suhyuk.yarn.helloworld.v1.HelloWorldAppMaster";
+    private static final String amClassName = "me.suhyuk.yarn.helloworld.HelloWorldAppMaster";
     private static final float amMemRatio = 0.7f;
     private static final int amMemory = 10;
     private static final int amCores = 1;
@@ -37,22 +38,24 @@ public class HelloWorldClient {
     private static final String amQueue = "default";
 
     private String workDir;
+    private String version;
     private Configuration conf;
     private ApplicationId applicationId;
 
     private String appMasterJar = "";
-    private String appMasterJarPath = "hello-world-v1.jar";
+    private String appMasterJarPath = "hello-world-app.jar";
     private String log4jJar = "";
     private String log4jJarPath = "log4j.properties";
 
 
-    public HelloWorldClient(String workDir) {
-        this(new YarnConfiguration(), workDir);
+    public HelloWorldClient(String workDir, String version) {
+        this(new YarnConfiguration(), workDir, version);
     }
 
-    public HelloWorldClient(Configuration conf, String workDir) {
+    public HelloWorldClient(Configuration conf, String workDir, String version) {
         this.conf = conf;
         this.workDir = workDir;
+        this.version = version;
         appMasterJar = workDir + File.separator + appMasterJarPath;
         log4jJar = workDir + File.separator + log4jJarPath;
     }
@@ -122,12 +125,16 @@ public class HelloWorldClient {
         return envs.toString();
     }
 
+    private String getAmClassName() {
+        return amClassName + this.version.toUpperCase();
+    }
+
     private String getCommands() {
         Vector<CharSequence> vargs = new Vector<>(10);
         vargs.add(Environment.JAVA_HOME.$$() + "/bin/java");
         vargs.add("-Xmx" + (int) Math.ceil(amMemory * amMemRatio) + "m");
         vargs.add("-XX:MaxDirectMemorySize=" + amMaxDirect + "m");
-        vargs.add(amClassName);
+        vargs.add(getAmClassName());
         vargs.add("1>" + ApplicationConstants.LOG_DIR_EXPANSION_VAR + "/AppMaster.stdout");
         vargs.add("2>" + ApplicationConstants.LOG_DIR_EXPANSION_VAR + "/AppMaster.stderr");
         return String.join(" ", vargs);

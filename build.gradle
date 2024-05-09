@@ -11,6 +11,8 @@ ext {
     targetCompatibility = '1.8'
 
     hadoopVersion = '3.1.2'
+    log4jVersion = '2.17.2'
+    lombokVersion = '1.18.32'
 }
 
 project.group = projectGroup
@@ -30,12 +32,24 @@ subprojects {
     }
 }
 
-project(':hello-world-v1') {
+project(':hello-world-app') {
 
     dependencies {
         implementation group: 'org.apache.hadoop', name: 'hadoop-client', version: hadoopVersion
         implementation group: 'org.apache.hadoop', name: 'hadoop-yarn-common', version: hadoopVersion
         implementation group: 'org.apache.hadoop', name: 'hadoop-yarn-client', version: hadoopVersion
+
+//        implementation group: 'org.apache.logging.log4j', name: 'log4j-api', version: log4jVersion
+//        implementation group: 'org.apache.logging.log4j', name: 'log4j-core', version: log4jVersion
+//        implementation group: 'org.apache.logging.log4j', name: 'log4j-slf4j-impl', version: log4jVersion
+
+        // https://projectlombok.org
+        compileOnly group: 'org.projectlombok', name: 'lombok', version: lombokVersion
+        annotationProcessor group: 'org.projectlombok', name: 'lombok', version: lombokVersion
+
+        testCompileOnly group: 'org.projectlombok', name: 'lombok', version: lombokVersion
+        testAnnotationProcessor group: 'org.projectlombok', name: 'lombok', version: lombokVersion
+
         testImplementation 'org.junit.jupiter:junit-jupiter-api:5.7.0'
         testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.7.0'
     }
@@ -43,7 +57,7 @@ project(':hello-world-v1') {
     jar {
         duplicatesStrategy = DuplicatesStrategy.INCLUDE
         manifest {
-            attributes "Main-Class": "me.suhyuk.yarn.helloworld.v1.HelloWorld"
+            attributes "Main-Class": "me.suhyuk.yarn.helloworld.HelloWorld"
         }
         from {
             configurations.compileClasspath.collect { it.isDirectory() ? it : zipTree(it) }
