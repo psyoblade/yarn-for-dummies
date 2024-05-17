@@ -58,15 +58,15 @@ public class DistributedShellAppMaster {
     private AMRMClientAsync amrmClientAsync;
     private NMClientAsync nmClientAsync;
 
-    // 쉘 파일 위치
+    // shell file path
     private static final String shellCommandPath = "shellCommands";
     private static final String shellArgsPath = "shellArgs";
     private long shellScriptPathTimestamp = 0;
     private long shellScriptPathLen = 0;
 
-    // 실제로 수행될 Shell 명령어
-    private String shellCommand = ""; // 쉘 명령어
-    private String shellArgs = "";    // 쉘 입력인자
+    // shell
+    private String shellCommand = "";
+    private String shellArgs = "";
     private String scriptPath = "";
     private Map<String, String> shellEnv = new HashMap<>();
 
@@ -79,7 +79,7 @@ public class DistributedShellAppMaster {
     }
 
     /**
-     * 파라매터 매개변수를 파싱하고, 초기화작업을 합니다
+     * parsing parameters and initialize
      *
      * @param args
      * @throws IOException
@@ -119,12 +119,12 @@ public class DistributedShellAppMaster {
         appAttemptId = containerId.getApplicationAttemptId();
         conf = new Configuration();
 
-        // 하둡에 사전에 업로드된 쉘 명령어를 읽어들입니다
+        // read shell commands on hdfs
         if (!fileExists(shellCommandPath) && envs.get(DSConstants.DISTRIBUTED_SHELL_SCRIPT_LOCATION).isEmpty()) {
             throw new IllegalArgumentException("앱마스터에 의해 수행될 쉘 스크립트가 환경변수로 전달되지 않았습니다");
         }
 
-        // 실행할 명령어와 인자를 가져옵니다
+        // shell commands and arguments
         if (fileExists(shellCommandPath)) shellCommand = readContents(shellCommandPath);
         if (fileExists(shellArgsPath)) shellArgs = readContents(shellArgsPath);
 

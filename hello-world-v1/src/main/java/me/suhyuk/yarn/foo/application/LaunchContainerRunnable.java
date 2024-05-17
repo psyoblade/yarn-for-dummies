@@ -21,8 +21,8 @@ public class LaunchContainerRunnable implements Runnable {
 
     private Container container;
     private NMClientAsync.AbstractCallbackHandler listener;
-    private String command = ""; // 쉘 명령어
-    private String args = "";    // 쉘 입력인자
+    private String command = ""; // shell commands
+    private String args = "";    // shell args
     private String path = "";
     private Map<String, String> envs;
 
@@ -40,15 +40,14 @@ public class LaunchContainerRunnable implements Runnable {
     }
 
     /**
-     * 컨테이너 런칭 스레드는 NMs 상의 컨테이너를 launches 하는 것이며, AM 을 통하여 allocated 된 이후 ContainerLaunchContext 를 생성
-     * 별도의 컨테이너를 통해 실제 쉘 프로그램이 기동되는 환경을 준비하는 과정
+     * launch containers on node-manager using allocated containers with app-master
      */
     @Override
     public void run() {
 
         Map<String, LocalResource> localResources = new HashMap<>();
 
-        // 업로드된 스크립트를 애플리케이션에서도 사용하기 위해 로컬 리소스로 다시 넣는 작업
+        // add local-resources by uploading scripts
         if (!path.isEmpty()) {
             Path renamedScriptPath = null;
             if (Shell.WINDOWS) {
@@ -79,9 +78,8 @@ public class LaunchContainerRunnable implements Runnable {
 //            command = Shell.WINDOWS ? windows_command : linux_bash_command;
         }
 
-        // 로컬라이즈드 된 파일이 존재한다면 해당 파일에 대한 처리가 필요하며
-
-        // 최종 애플리케이션 실행을 위한 커맨드 및 리소스 정보를 전달하여 애플리케이션을 수행합니다
+        // TODO: handling localized files
+        // run application using command and resources
         Vector<CharSequence> vargs = new Vector<>(5);
         vargs.add(command);
         if (!path.isEmpty()) {

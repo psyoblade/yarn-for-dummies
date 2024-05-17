@@ -1,27 +1,39 @@
-package me.suhyuk.yarn.helloworld.v1;
+package me.suhyuk.yarn.netcat;
 
+import com.google.common.collect.ImmutableMap;
+import org.apache.commons.compress.utils.Lists;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.net.NetUtils;
 import org.apache.hadoop.security.Credentials;
 import org.apache.hadoop.security.UserGroupInformation;
+import org.apache.hadoop.util.ClassUtil;
 import org.apache.hadoop.yarn.api.ApplicationConstants;
 import org.apache.hadoop.yarn.api.ApplicationConstants.Environment;
+import org.apache.hadoop.yarn.api.protocolrecords.AllocateResponse;
 import org.apache.hadoop.yarn.api.protocolrecords.RegisterApplicationMasterResponse;
 import org.apache.hadoop.yarn.api.records.*;
+import org.apache.hadoop.yarn.client.api.AMRMClient;
+import org.apache.hadoop.yarn.client.api.NMClient;
 import org.apache.hadoop.yarn.client.api.async.AMRMClientAsync;
 import org.apache.hadoop.yarn.conf.YarnConfiguration;
 import org.apache.hadoop.yarn.exceptions.YarnException;
+import org.apache.hadoop.yarn.util.Apps;
+import org.apache.hadoop.yarn.util.ConverterUtils;
 import org.apache.hadoop.yarn.util.Records;
 import org.apache.hadoop.yarn.util.resource.ResourceUtils;
 import org.apache.log4j.Logger;
 
+import java.io.File;
 import java.io.IOException;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
+import java.util.concurrent.TimeUnit;
 
-public class HelloWorldAppMaster {
+public class NetCatAppMaster {
 
-    private static final Logger LOG = Logger.getLogger(HelloWorldAppMaster.class);
+    private static final Logger LOG = Logger.getLogger(NetCatAppMaster.class);
     private static final Map<String, String> envs = System.getenv();
     private static final String CONTAINER_ID = Environment.CONTAINER_ID.name();
 
@@ -35,7 +47,7 @@ public class HelloWorldAppMaster {
     private UserGroupInformation appSubmitterUgi;
 
     // amrm, nm client
-    private AMRMClientAsync amrmClientAsync;
+    AMRMClient<AMRMClient.ContainerRequest> amrmClient;
     private String appMasterHostname;
     private int appMasterHostPort = -1;
     private String appMasterTrackingUrl = "";
@@ -43,7 +55,7 @@ public class HelloWorldAppMaster {
     private FinalApplicationStatus appStatus;
     private String message;
 
-    public HelloWorldAppMaster() {
+    public NetCatAppMaster() {
         conf = new YarnConfiguration();
     }
 
@@ -84,80 +96,91 @@ public class HelloWorldAppMaster {
         appSubmitterUgi.addCredentials(credentials);
         LOG.info("User credentials is created");
 
-        AMRMClientAsync.AbstractCallbackHandler allocationListener = newAMRMCallbackHandler();
-        amrmClientAsync = AMRMClientAsync.createAMRMClientAsync(1000, allocationListener);
-        amrmClientAsync.init(conf);
-        amrmClientAsync.start();
+        amrmClient = AMRMClient.createAMRMClient();
+        amrmClient.init(conf);
+        amrmClient.start();
         LOG.info("appMaster amrmClient has started");
 
-        appMasterHostname = NetUtils.getHostname();
-        RegisterApplicationMasterResponse response =
-                amrmClientAsync.registerApplicationMaster(appMasterHostname, appMasterHostPort, appMasterTrackingUrl);
-        resourceProfiles = response.getResourceProfiles();
-        ResourceUtils.reinitializeResources(response.getResourceTypes());
+        RegisterApplicationMasterResponse amResponse =
+                amrmClient.registerApplicationMaster(appMasterHostname, 0, appMasterTrackingUrl);
+        resourceProfiles = amResponse.getResourceProfiles();
+        ResourceUtils.reinitializeResources(amResponse.getResourceTypes());
         LOG.info("appMaster reinitialized resources");
 
-        for (int i = 0; i < 100; i++) {
+        // TODO: application 통해서 `nc -zvw10 datanode 9862` 명령어 수행
+        NMClient nmClient = NMClient.createNMClient();
+        nmClient.init(conf);
+        nmClient.start();
+
+        Priority priority = Records.newRecord(Priority.class);
+        priority.setPriority(0);
+
+        Resource capability = Records.newRecord(Resource.class);
+        capability.setMemorySize(16);
+        capability.setVirtualCores(1);
+
+        AMRMClient.ContainerRequest containerAsk = new AMRMClient.ContainerRequest(capability, null, null, priority);
+        amrmClient.addContainerRequest(containerAsk);
+
+        int success = 0;
+        int failure = 0;
+        int totalContainers = 10;
+        int waitingContainers = totalContainers; // total-num-of-containers = 2
+        int increment = 0;
+        float progressIndicator;
+        while (waitingContainers > 0) {
+            float completedRatio = (float) (success + failure) / (float) totalContainers;
+            float incrementValue = Float.MIN_VALUE * increment++;
+            progressIndicator = completedRatio + incrementValue;
+            AllocateResponse allocated = amrmClient.allocate(progressIndicator); // 왜 이런식으로 업데이트 해주는가?
+
+            // 할당 받은 컨테이너 실행
+            for (Container container : allocated.getAllocatedContainers()) { // 현재 시점에 할당된 컨테이너 전체
+                ContainerLaunchContext ctx = Records.newRecord(ContainerLaunchContext.class);
+                ctx.setCommands(
+                    Collections.singletonList(
+                        String.format(
+                            "/bin/nc -zvw1 datanode 9862 1>%s/stdout 2>%s/stderr",
+                            NetCatAppMaster.class.getName(),
+                            ApplicationConstants.LOG_DIR_EXPANSION_VAR,
+                            ApplicationConstants.LOG_DIR_EXPANSION_VAR
+                        )
+                    )
+                );
+                nmClient.startContainer(container, ctx);
+                waitingContainers -= 1;
+            }
+
+            // 실행 중인 컨테이너의 상태 확인
+            for (ContainerStatus status : allocated.getCompletedContainersStatuses()) {
+                if (status.getExitStatus() == ContainerExitStatus.SUCCESS) {
+                    success += 1;
+                } else {
+                    failure += 1;
+                }
+            }
+
+            // 잠시 대기
             try {
-                Thread.sleep(1000);
+                LOG.info("Application is Running... ");
+                TimeUnit.SECONDS.sleep(1);
             } catch (InterruptedException e) {
                 appStatus = FinalApplicationStatus.FAILED;
                 message = "Application failed with interrupted exception " + e.getLocalizedMessage();
                 e.printStackTrace();
             }
-            LOG.info("Application '" + i + "' Job is Running... ");
         }
         appStatus = FinalApplicationStatus.ENDED;
-    }
-
-    private AMRMClientAsync.AbstractCallbackHandler newAMRMCallbackHandler() {
-
-        return new AMRMClientAsync.AbstractCallbackHandler() {
-            @Override
-            public void onContainersCompleted(List<ContainerStatus> statuses) {
-
-            }
-
-            @Override
-            public void onContainersAllocated(List<Container> containers) {
-
-            }
-
-            @Override
-            public void onContainersUpdated(List<UpdatedContainer> containers) {
-
-            }
-
-            @Override
-            public void onShutdownRequest() {
-
-            }
-
-            @Override
-            public void onNodesUpdated(List<NodeReport> updatedNodes) {
-
-            }
-
-            @Override
-            public float getProgress() {
-                return 0;
-            }
-
-            @Override
-            public void onError(Throwable e) {
-
-            }
-        };
     }
 
     public void finish() {
         try {
             appStatus = FinalApplicationStatus.SUCCEEDED;
-            amrmClientAsync.unregisterApplicationMaster(appStatus, message, null);
+            amrmClient.unregisterApplicationMaster(appStatus, message, null);
         } catch (YarnException | IOException e) {
             LOG.error("Failed to unregister application", e);
         }
-        amrmClientAsync.stop();
+        amrmClient.stop();
         LOG.info("HelloWorldAppMaster has stopped");
     }
 
@@ -166,9 +189,9 @@ public class HelloWorldAppMaster {
     }
 
     public static void main(String[] args) {
-        HelloWorldAppMaster appMaster = null;
+        NetCatAppMaster appMaster = null;
         try {
-            appMaster = new HelloWorldAppMaster();
+            appMaster = new NetCatAppMaster();
             appMaster.init(args);
             LOG.info("HelloWorldAppMaster initialized");
 
