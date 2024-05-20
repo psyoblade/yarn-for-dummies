@@ -2,7 +2,7 @@
 
 if [[ $# -ne 2 ]]; then
   echo "$0 [project-name] [build]"
-  echo "$0 hello-world-v1 true"
+  echo "$0 hadoop-yarn-application true"
   exit 1
 fi
 
@@ -13,6 +13,11 @@ CLASSPATH="."
 
 function clean_and_build() {
   ./gradlew ":$PROJECT_NAME:clean" ":$PROJECT_NAME:build"
+  res=$?
+  if [[ $res -ne 0 ]]; then
+    echo "build failed with $res"
+    exit
+  fi
   echo "clean & build $PROJECT_NAME completed"
 }
 
