@@ -7,7 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class HelloWorldClientTest {
 
     @Test
-    public void 문자열과_숫자의_병합출력() {
+    public void print_character_and_numeric() {
         String str = "문자열";
         int i = 0;
         assertTrue("문자열0".equals(str + i));

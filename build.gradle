@@ -4,7 +4,7 @@ plugins {
 
 ext {
     projectGroup = 'me.suhyuk.yarn'
-    projectName = 'hello-world'
+    projectName = 'hadoop-yarn-applications'
     projectVersion = 'v1'
 
     sourceCompatibility = '1.8'
@@ -27,15 +27,22 @@ subprojects {
 
     dependencies {
 //        testImplementation 'junit:junit:4.13.1'
+//        implementation group: 'org.slf4j', name: 'slf4j-log4j12', version: '1.7.10'
     }
 }
 
-project(':hello-world-v1') {
+project(':hadoop-yarn-applications') {
 
     dependencies {
-        implementation group: 'org.apache.hadoop', name: 'hadoop-client', version: hadoopVersion
-        implementation group: 'org.apache.hadoop', name: 'hadoop-yarn-common', version: hadoopVersion
-        implementation group: 'org.apache.hadoop', name: 'hadoop-yarn-client', version: hadoopVersion
+        implementation(group: 'org.apache.hadoop', name: 'hadoop-client', version: hadoopVersion) {
+            exclude group: 'org.slf4j', module: 'slf4j-log4j12'
+        }
+        implementation(group: 'org.apache.hadoop', name: 'hadoop-yarn-common', version: hadoopVersion) {
+            exclude group: 'org.slf4j', module: 'slf4j-log4j12'
+        }
+        implementation(group: 'org.apache.hadoop', name: 'hadoop-yarn-client', version: hadoopVersion) {
+            exclude group: 'org.slf4j', module: 'slf4j-log4j12'
+        }
         testImplementation 'org.junit.jupiter:junit-jupiter-api:5.7.0'
         testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.7.0'
     }
@@ -43,7 +50,8 @@ project(':hello-world-v1') {
     jar {
         duplicatesStrategy = DuplicatesStrategy.INCLUDE
         manifest {
-            attributes "Main-Class": "me.suhyuk.yarn.helloworld.v1.HelloWorld"
+//            attributes "Main-Class": "me.suhyuk.yarn.helloworld.v1.HelloWorld"
+            attributes "Main-Class": "me.suhyuk.yarn.netcat.v1.NetCatClient"
         }
         from {
             configurations.compileClasspath.collect { it.isDirectory() ? it : zipTree(it) }

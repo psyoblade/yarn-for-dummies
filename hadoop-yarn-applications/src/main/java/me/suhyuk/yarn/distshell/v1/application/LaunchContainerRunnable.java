@@ -1,6 +1,6 @@
-package me.suhyuk.yarn.foo.application;
+package me.suhyuk.yarn.distshell.v1.application;
 
-import me.suhyuk.yarn.foo.client.DistributedShellClient;
+import me.suhyuk.yarn.distshell.v1.client.DistributedShellClient;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.util.Shell;
 import org.apache.hadoop.yarn.api.ApplicationConstants;

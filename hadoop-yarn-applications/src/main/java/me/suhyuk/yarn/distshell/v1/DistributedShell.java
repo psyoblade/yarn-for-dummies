@@ -1,6 +1,6 @@
-package me.suhyuk.yarn.foo;
+package me.suhyuk.yarn.distshell.v1;
 
-import me.suhyuk.yarn.foo.client.DistributedShellClient;
+import me.suhyuk.yarn.distshell.v1.client.DistributedShellClient;
 import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.hadoop.yarn.exceptions.YarnException;
 

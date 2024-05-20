@@ -1,7 +1,7 @@
-package me.suhyuk.yarn.foo.appmaster;
+package me.suhyuk.yarn.distshell.v1.appmaster;
 
-import me.suhyuk.yarn.foo.application.LaunchContainerRunnable;
-import me.suhyuk.yarn.foo.common.DSConstants;
+import me.suhyuk.yarn.distshell.v1.application.LaunchContainerRunnable;
+import me.suhyuk.yarn.distshell.v1.common.DSConstants;
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.GnuParser;
 import org.apache.commons.cli.Options;
@@ -192,6 +192,7 @@ public class DistributedShellAppMaster {
             /**
              * 앱마스터에 의해 요청된 컨테이너 가운데, 할당된 컨테이너가 비동기적으로 생성되었을 때에 할당된 컨테이너와 함께 호출됩니다
              * 개별 컨테이너들을 별도의 스레드로 동작하여 메인 스레드가 블록되지 않도록 합니다
+             *
              * @param allocatedContainers
              */
             @Override

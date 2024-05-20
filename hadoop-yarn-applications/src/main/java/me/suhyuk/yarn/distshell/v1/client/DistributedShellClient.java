@@ -1,6 +1,6 @@
-package me.suhyuk.yarn.foo.client;
+package me.suhyuk.yarn.distshell.v1.client;
 
-import me.suhyuk.yarn.foo.common.DSConstants;
+import me.suhyuk.yarn.distshell.v1.common.DSConstants;
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.hadoop.conf.Configuration;

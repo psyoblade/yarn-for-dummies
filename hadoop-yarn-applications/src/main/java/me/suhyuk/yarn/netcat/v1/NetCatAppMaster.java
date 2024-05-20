@@ -1,15 +1,8 @@
-package me.suhyuk.yarn.netcat;
+package me.suhyuk.yarn.netcat.v1;
 
-import com.google.common.collect.ImmutableMap;
-import org.apache.commons.compress.utils.Lists;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.net.NetUtils;
 import org.apache.hadoop.security.Credentials;
 import org.apache.hadoop.security.UserGroupInformation;
-import org.apache.hadoop.util.ClassUtil;
 import org.apache.hadoop.yarn.api.ApplicationConstants;
 import org.apache.hadoop.yarn.api.ApplicationConstants.Environment;
 import org.apache.hadoop.yarn.api.protocolrecords.AllocateResponse;
@@ -17,17 +10,15 @@ import org.apache.hadoop.yarn.api.protocolrecords.RegisterApplicationMasterRespo
 import org.apache.hadoop.yarn.api.records.*;
 import org.apache.hadoop.yarn.client.api.AMRMClient;
 import org.apache.hadoop.yarn.client.api.NMClient;
-import org.apache.hadoop.yarn.client.api.async.AMRMClientAsync;
 import org.apache.hadoop.yarn.conf.YarnConfiguration;
 import org.apache.hadoop.yarn.exceptions.YarnException;
-import org.apache.hadoop.yarn.util.Apps;
-import org.apache.hadoop.yarn.util.ConverterUtils;
 import org.apache.hadoop.yarn.util.Records;
 import org.apache.hadoop.yarn.util.resource.ResourceUtils;
 import org.apache.log4j.Logger;
 
-import java.io.File;
 import java.io.IOException;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 
@@ -42,6 +33,8 @@ public class NetCatAppMaster {
     private ContainerId containerId;
     private ApplicationAttemptId attemptId;
     private ApplicationId applicationId;
+    private int success = 0;
+    private int failure = 0;
 
     // user related
     private UserGroupInformation appSubmitterUgi;
@@ -63,13 +56,24 @@ public class NetCatAppMaster {
         return appName + "/" + appId + "/" + fileDstPath;
     }
 
+    private String getLocalHostName() {
+        String hostname = "";
+        try {
+            hostname = InetAddress.getLocalHost().getHostName();
+        } catch (UnknownHostException e) {
+            hostname = "Unknown";
+        }
+        return hostname;
+    }
+
     public void init(String[] args) {
         checkEnvironments();
         containerId = ContainerId.fromString(envs.get(CONTAINER_ID));
         attemptId = containerId.getApplicationAttemptId();
         applicationId = attemptId.getApplicationId();
+        appMasterHostname = getLocalHostName();
         LOG.info("Application master for app" + ", appId="
-                + attemptId.getApplicationId().getId() + ", clusterTimestamp="
+                + applicationId.toString() + ", clusterTimestamp="
                 + attemptId.getApplicationId().getClusterTimestamp()
                 + ", attemptId=" + attemptId.getAttemptId());
     }
@@ -119,36 +123,40 @@ public class NetCatAppMaster {
         capability.setMemorySize(16);
         capability.setVirtualCores(1);
 
-        AMRMClient.ContainerRequest containerAsk = new AMRMClient.ContainerRequest(capability, null, null, priority);
-        amrmClient.addContainerRequest(containerAsk);
-
-        int success = 0;
-        int failure = 0;
-        int totalContainers = 10;
+        int totalContainers = 3;
         int waitingContainers = totalContainers; // total-num-of-containers = 2
         int increment = 0;
-        float progressIndicator;
-        while (waitingContainers > 0) {
+        float progressIndicator = 0;
+
+        for (int i = 0; i < totalContainers; i++) {
+            AMRMClient.ContainerRequest containerAsk = new AMRMClient.ContainerRequest(capability, null, null, priority);
+            amrmClient.addContainerRequest(containerAsk);
+            LOG.info(String.format("container requested '%d'", i));
+        }
+
+        int port = 9000;
+        while ((success + failure) < totalContainers) {
             float completedRatio = (float) (success + failure) / (float) totalContainers;
             float incrementValue = Float.MIN_VALUE * increment++;
             progressIndicator = completedRatio + incrementValue;
+            LOG.info(String.format("progress indicator %f, waiting containers %d", progressIndicator, waitingContainers));
             AllocateResponse allocated = amrmClient.allocate(progressIndicator); // 왜 이런식으로 업데이트 해주는가?
 
             // 할당 받은 컨테이너 실행
             for (Container container : allocated.getAllocatedContainers()) { // 현재 시점에 할당된 컨테이너 전체
                 ContainerLaunchContext ctx = Records.newRecord(ContainerLaunchContext.class);
-                ctx.setCommands(
-                    Collections.singletonList(
-                        String.format(
-                            "/bin/nc -zvw1 datanode 9862 1>%s/stdout 2>%s/stderr",
-                            NetCatAppMaster.class.getName(),
-                            ApplicationConstants.LOG_DIR_EXPANSION_VAR,
-                            ApplicationConstants.LOG_DIR_EXPANSION_VAR
-                        )
-                    )
+
+                String commands = String.format(
+                        "/bin/nc -zvw10 namenode %d 1>%s/stdout 2>%s/stderr",
+                        port,
+                        ApplicationConstants.LOG_DIR_EXPANSION_VAR,
+                        ApplicationConstants.LOG_DIR_EXPANSION_VAR
                 );
+                ctx.setCommands(Collections.singletonList(commands));
+                LOG.info(String.format("executing '%s'", commands));
                 nmClient.startContainer(container, ctx);
                 waitingContainers -= 1;
+                port += 1;
             }
 
             // 실행 중인 컨테이너의 상태 확인
@@ -158,34 +166,44 @@ public class NetCatAppMaster {
                 } else {
                     failure += 1;
                 }
+                LOG.info(String.format("status of container '%s' - success : %d, failure: %d with exit status %d",
+                        status.getContainerId().toString(), success, failure, status.getExitStatus()));
             }
 
             // 잠시 대기
             try {
                 LOG.info("Application is Running... ");
-                TimeUnit.SECONDS.sleep(1);
+                TimeUnit.SECONDS.sleep(3);
             } catch (InterruptedException e) {
                 appStatus = FinalApplicationStatus.FAILED;
                 message = "Application failed with interrupted exception " + e.getLocalizedMessage();
                 e.printStackTrace();
             }
         }
-        appStatus = FinalApplicationStatus.ENDED;
     }
 
     public void finish() {
         try {
-            appStatus = FinalApplicationStatus.SUCCEEDED;
+            if (failure == 0) {
+                appStatus = FinalApplicationStatus.SUCCEEDED;
+                LOG.info(String.format("Succeeded with all success job %d", success));
+            } else if (success > 0 && failure > 0) {
+                appStatus = FinalApplicationStatus.ENDED; // application which has subtasks with multiple states
+                LOG.error(String.format("Failed with failed job %d, success job %d", failure, success));
+            } else {
+                appStatus = FinalApplicationStatus.FAILED;
+                LOG.error(String.format("Failed with failed all job %d", failure));
+            }
             amrmClient.unregisterApplicationMaster(appStatus, message, null);
         } catch (YarnException | IOException e) {
             LOG.error("Failed to unregister application", e);
         }
         amrmClient.stop();
-        LOG.info("HelloWorldAppMaster has stopped");
+        LOG.info("Hadoop Yarn Application has stopped");
     }
 
     public void cleanup() {
-        LOG.info("HelloWorldAppMaster has cleaned up");
+        LOG.info("Hadoop Yarn Application has cleaned up");
     }
 
     public static void main(String[] args) {
@@ -193,7 +211,7 @@ public class NetCatAppMaster {
         try {
             appMaster = new NetCatAppMaster();
             appMaster.init(args);
-            LOG.info("HelloWorldAppMaster initialized");
+            LOG.info("Hadoop Yarn Application initialized");
 
             appMaster.run();
             appMaster.finish();

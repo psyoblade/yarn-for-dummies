@@ -1,4 +1,4 @@
-package me.suhyuk.yarn.netcat;
+package me.suhyuk.yarn.netcat.v1;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataOutputStream;
@@ -25,10 +25,10 @@ import java.util.*;
 public class NetCatClient {
 
     private static final Logger LOG = Logger.getLogger(NetCatClient.class);
-    private static final String appName = "hello-world-client-v1";
+    private static final String appName = "hadoop-yarn-applications-v1";
 
     // am related settings
-    private static final String amClassName = "me.suhyuk.yarn.helloworld.v1.HelloWorldAppMaster";
+    private static final String amClassName = "me.suhyuk.yarn.netcat.v1.NetCatAppMaster";
     private static final float amMemRatio = 0.7f;
     private static final int amMemory = 10;
     private static final int amCores = 1;
@@ -41,7 +41,7 @@ public class NetCatClient {
     private ApplicationId applicationId;
 
     private String appMasterJar = "";
-    private String appMasterJarPath = "hello-world-v1.jar";
+    private String appMasterJarPath = "hadoop-yarn-applications.jar";
     private String log4jJar = "";
     private String log4jJarPath = "log4j.properties";
 
@@ -172,5 +172,26 @@ public class NetCatClient {
         conf.addResource("conf/hadoop/core-site.xml");
         conf.addResource("conf/hadoop/hdfs-site.xml");
         conf.addResource("conf/hadoop/yarn-site.xml");
+    }
+
+    private static void printUsageAndExitWithError() {
+        System.err.println("Illegal Arguments Length - exit with errno 1");
+        System.err.println("Usage NetCatClient [work-dir]");
+        System.exit(1);
+    }
+
+    public static void main(String[] args) {
+        try {
+            String workDir = ".";
+            if (args.length == 1) {
+                workDir = args[0];
+            } else {
+                printUsageAndExitWithError();
+            }
+            NetCatClient netcatClient = new NetCatClient(workDir);
+            netcatClient.run();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 }
