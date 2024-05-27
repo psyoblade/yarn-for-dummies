@@ -13,7 +13,6 @@ import org.apache.hadoop.yarn.client.api.YarnClient;
 import org.apache.hadoop.yarn.client.api.YarnClientApplication;
 import org.apache.hadoop.yarn.conf.YarnConfiguration;
 import org.apache.hadoop.yarn.exceptions.YarnException;
-import org.apache.hadoop.yarn.util.Records;
 import org.apache.log4j.Logger;
 
 import java.io.File;
@@ -41,10 +40,10 @@ public class NetCatClient {
     private Configuration conf;
     private ApplicationId applicationId;
 
-    private String appMasterJar = "";
-    private String appMasterJarPath = appName + ".jar";
-    private String log4jJar = "";
-    private String log4jJarPath = "log4j.properties";
+    private String appMasterJar = appName + ".jar";
+    private String appMasterJarPath = "";
+    private String log4jJar = "log4j.properties";
+    private String log4jJarPath = "";
 
 
     public NetCatClient(String workDir) {
@@ -54,14 +53,14 @@ public class NetCatClient {
     public NetCatClient(Configuration conf, String workDir) {
         this.conf = conf;
         this.workDir = workDir;
-        appMasterJar = workDir + File.separator + appMasterJarPath;
-        log4jJar = workDir + File.separator + log4jJarPath;
+        appMasterJarPath = workDir + File.separator + appMasterJar;
+        log4jJarPath = workDir + File.separator + log4jJar;
     }
 
     /**
-     * yarnClient 를 통해서 수행할 작업을 submit 합니다
-     * - 실행을 위한 명령어 및 환경변수는 ApplicationSubmissionContext 객체에 담아서 전달하며
-     * - 실행에 필요한 파일은 하둡에 업로드하고
+     * submit using yarnClient
+     * - ApplicationSubmissionContext with environment
+     * - upload files to hdfs
      *
      * @throws IOException
      * @throws YarnException
@@ -104,7 +103,7 @@ public class NetCatClient {
         FileSystem fs = FileSystem.get(conf);
         Map<String, LocalResource> localResources = new HashMap<>();
         Map<String, String> envs = Collections.singletonMap("CLASSPATH", getClasspathEnvs());
-        List<String> commands = Collections.singletonList(getCommands());
+        List<String> commands = Collections.singletonList(getAppMasterCommands());
         addToLocalResources(fs, appMasterJar, appMasterJarPath, applicationId.toString(), localResources, null);
         addToLocalResources(fs, log4jJar, log4jJarPath, applicationId.toString(), localResources, null);
         return ContainerLaunchContext.newInstance(localResources, envs, commands, null, null, null);
@@ -123,7 +122,7 @@ public class NetCatClient {
         return envs.toString();
     }
 
-    private String getCommands() {
+    private String getAppMasterCommands() {
         Vector<CharSequence> vargs = new Vector<>(10);
         vargs.add(Environment.JAVA_HOME.$$() + "/bin/java");
         vargs.add("-Xmx" + (int) Math.ceil(amMemory * amMemRatio) + "m");
@@ -135,38 +134,41 @@ public class NetCatClient {
     }
 
     /**
-     * 원본 파일이 없다면, 대상 경로만 생성하고, 있다면 로컬 파일을 원격지로 복사합니다
+     * create target directory if file is not exists
+     * if exists, copy local file to remote
      * @param fs
-     * @param fileSrcPath
-     * @param fileDstPath
+     * @param appMasterJarName
+     * @param appMasterJarPath
      * @param appId
      * @param localResources
      * @param resources
      * @throws IOException
      */
-    private void addToLocalResources(FileSystem fs, String fileSrcPath, String fileDstPath,
+    private void addToLocalResources(FileSystem fs, String appMasterJarName, String appMasterJarPath,
                                      String appId, Map<String, LocalResource> localResources,
                                      String resources) throws IOException {
-        String suffix = NetCatAppMaster.getRelativePath(appName, appId, fileDstPath);
-        Path dst = new Path(fs.getHomeDirectory(), suffix);
-        if (fileSrcPath == null) {
-            try (FSDataOutputStream ostream = FileSystem.create(fs, dst, new FsPermission((short) 0710))) {
-                ostream.writeUTF(resources);
+
+        String suffix = NetCatAppMaster.getRelativePath(appName, appId, appMasterJarName);
+        Path targetPath = new Path(fs.getHomeDirectory(), suffix);
+        if (appMasterJarPath == null) {
+            try (FSDataOutputStream stream = FileSystem.create(fs, targetPath, new FsPermission((short) 0710))) {
+                stream.writeUTF(resources);
             }
         } else {
-            fs.copyFromLocalFile(new Path(fileSrcPath), dst);
-            LOG.info("copyFromLocalFile '" + fileSrcPath.toString() + "' to '" + dst.toString() + "'");
+            LOG.info(String.format("copyFromLocalFile '%s' to '%s'", appMasterJarPath, targetPath));
+            fs.copyFromLocalFile(new Path(appMasterJarPath), targetPath);
         }
-        FileStatus dstFileStatus = fs.getFileStatus(dst);
-        LocalResource dstResource = LocalResource.newInstance(
-                URL.fromURI(dst.toUri()),
+
+        FileStatus dstFileStatus = fs.getFileStatus(targetPath);
+        LocalResource appMasterJar = LocalResource.newInstance(
+                URL.fromURI(targetPath.toUri()),
                 LocalResourceType.FILE,
                 LocalResourceVisibility.APPLICATION,
                 dstFileStatus.getLen(),
                 dstFileStatus.getModificationTime()
         );
-        localResources.put(fileDstPath, dstResource);
-        LOG.info("addResource '" + fileDstPath.toString() + "' at '" + dstResource.getResource() + "'");
+        localResources.put(appMasterJarName, appMasterJar);
+        LOG.info("addResource '" + appMasterJarName + "' at '" + appMasterJar.getResource() + "'");
     }
 
     private void addResources() {

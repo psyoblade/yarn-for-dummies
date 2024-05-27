@@ -37,7 +37,7 @@ public class DistributedShellAppMaster {
 
     private static ContainerId containerId;
 
-    // 할당 및 완료된 컨테이너의 갯수
+    // assigned or completed num of containers
     private AtomicInteger numAllocatedContainers = new AtomicInteger();
     private AtomicInteger numCompletedContainers = new AtomicInteger();
 
@@ -121,7 +121,7 @@ public class DistributedShellAppMaster {
 
         // read shell commands on hdfs
         if (!fileExists(shellCommandPath) && envs.get(DSConstants.DISTRIBUTED_SHELL_SCRIPT_LOCATION).isEmpty()) {
-            throw new IllegalArgumentException("앱마스터에 의해 수행될 쉘 스크립트가 환경변수로 전달되지 않았습니다");
+            throw new IllegalArgumentException("No shell scripts for running on app-master using environment");
         }
 
         // shell commands and arguments
@@ -146,7 +146,7 @@ public class DistributedShellAppMaster {
             }
         }
 
-        // 쉘 파일 경로를 가져옵니다
+        // getting path for shell script
         if (envs.containsKey(DSConstants.DISTRIBUTED_SHELL_SCRIPT_LOCATION)) {
             scriptPath = envs.get(DSConstants.DISTRIBUTED_SHELL_SCRIPT_LOCATION);
 
@@ -159,9 +159,9 @@ public class DistributedShellAppMaster {
 
             if (!scriptPath.isEmpty() &&
                     (shellScriptPathTimestamp <=0 || shellScriptPathLen <= 0)) {
-                LOG.error("쉘 실행정보에 오류가 있습니다. 쉘: '" + scriptPath + "', 타임스탬프: '" + shellScriptPathTimestamp +
-                        "', 길이: '" + shellScriptPathLen + "'");
-                throw new IllegalArgumentException("쉘 스크리브 경로 환경변수에 오류가 있습니다");
+                LOG.error("Errors on shell script : '" + scriptPath + "', timestamp: '" + shellScriptPathTimestamp +
+                        "', length: '" + shellScriptPathLen + "'");
+                throw new IllegalArgumentException("Errors on shell script path environment");
             }
         }
     }
@@ -178,7 +178,7 @@ public class DistributedShellAppMaster {
     }
 
     /**
-     * 리소스 할당에 대한 리스너를 AMRMClientAsync 통해서 생성 및 시작합니다
+     * start AMRMClientAsync
      */
     private void startAMRMClient() {
 
@@ -190,14 +190,16 @@ public class DistributedShellAppMaster {
             }
 
             /**
-             * 앱마스터에 의해 요청된 컨테이너 가운데, 할당된 컨테이너가 비동기적으로 생성되었을 때에 할당된 컨테이너와 함께 호출됩니다
-             * 개별 컨테이너들을 별도의 스레드로 동작하여 메인 스레드가 블록되지 않도록 합니다
              *
+             * one of the containers which is requested by app-master
+             * has created, this method will be called
+             *
+             * each containers are working for each thread, be-ware to be blocked by main-thread
              * @param allocatedContainers
              */
             @Override
             public void onContainersAllocated(List<Container> allocatedContainers) {
-                LOG.info("리소스 매니저로부터 총 '" + allocatedContainers.size() + "'개의 컨테이너를 할당 받았습니다");
+                LOG.info("From resource-manager total '" + allocatedContainers.size() + "' containers are allocated");
                 numAllocatedContainers.addAndGet(allocatedContainers.size());
                 for (Container allocatedContainer : allocatedContainers) {
                     LaunchContainerRunnable runnableLaunchContainer =
@@ -225,9 +227,9 @@ public class DistributedShellAppMaster {
             }
 
             /**
-             * Heart beat 시에 호출되는 애플리케이션 진행을 나타내는 핸들러
+             * Heart beat
              *
-             * @return 완료된 컨테이너 수 / 전체 컨테이너 수
+             * @return completed containers / total containers
              */
             @Override
             public float getProgress() {
@@ -245,9 +247,6 @@ public class DistributedShellAppMaster {
         amrmClientAsync.start();
     }
 
-    /**
-     * 컨테이너 생성에 대한 리스너를 NMClientAsync 통해서 생성 및 시작합니다
-     */
     private void startNMClient() {
         containerListener = new NMClientAsync.AbstractCallbackHandler() {
 
@@ -307,9 +306,9 @@ public class DistributedShellAppMaster {
     }
 
     /**
-     * 앱마스터가 리소스매니저에게 자신이 살아있음을 알리기 위해 등록 합니다
-     * 등록결과를 통해 현재 클러스터의 리소스 용량을 확인할 수 있습니다
-     * 요청해야 하는 컨테이너 수를 계산하여 모든 컨테이너 수를 채울때 까지 컨테이너를 요청합니다
+     * register app-master for alerting alive or not
+     * returns information about cluster resources anc capacity
+     * request each container until all containers are requested
      */
     private void registerAppMaster() throws IOException, YarnException {
         appMasterHostname = NetUtils.getHostname();
@@ -324,13 +323,13 @@ public class DistributedShellAppMaster {
 
         if (containerMemory > maxMemory) {
             containerMemory = maxMemory;
-            LOG.info("요청한 메모리의 크기(" + containerMemory + ")가 컨테이너 최대 메모리 임계치(" + maxMemory + ")보다 " +
-                    "크기 때문에, 설정가능한 최대 크기로 설정됩니다");
+            LOG.info("Requested memory (" + containerMemory + ") is bigger then maximum memory threshold(" + maxMemory + "), " +
+                    "Modify maximum-size could be");
         }
         if (containerVCores > maxVCores) {
             containerVCores = maxVCores;
-            LOG.info("요청한 코어의 수(" + containerVCores + ")가 컨테이너 최대 코어 임계치(" + maxVCores + ")보다 " +
-                    "크기 때문에, 설정가능한 최대 크기로 설정됩니다");
+            LOG.info("Requested core (" + containerVCores + ") is bigger then maximum core threshold (" + maxVCores + "), " +
+                    "Modify maximum-size could be");
         }
         List<Container> previousAMRunningContainers = response.getContainersFromPreviousAttempts();
         LOG.info(appAttemptId + " received " + previousAMRunningContainers.size()
@@ -349,7 +348,6 @@ public class DistributedShellAppMaster {
         Priority priority = Priority.newInstance(requestPriority);
         Resource capability = Resource.newInstance(containerMemory, containerVCores);
         AMRMClient.ContainerRequest request = new AMRMClient.ContainerRequest(capability, null, null, priority);
-        LOG.info("컨테이너 요청 : " + request.toString());
         return request;
     }
 

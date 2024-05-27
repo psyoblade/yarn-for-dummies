@@ -31,7 +31,7 @@ subprojects {
     }
 }
 
-project(':hadoop-yarn-applications') {
+project(':hadoop-yarn-appmasters') {
 
     dependencies {
         implementation(group: 'org.apache.hadoop', name: 'hadoop-client', version: hadoopVersion) {
@@ -43,6 +43,43 @@ project(':hadoop-yarn-applications') {
         implementation(group: 'org.apache.hadoop', name: 'hadoop-yarn-client', version: hadoopVersion) {
             exclude group: 'org.slf4j', module: 'slf4j-log4j12'
         }
+        testImplementation 'org.junit.jupiter:junit-jupiter-api:5.7.0'
+        testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.7.0'
+    }
+
+    jar {
+        duplicatesStrategy = DuplicatesStrategy.INCLUDE
+        manifest {
+            attributes "Main-Class": "me.suhyuk.yarn.netcat.v1.NetCatClient"
+        }
+        from {
+            configurations.compileClasspath.collect { it.isDirectory() ? it : zipTree(it) }
+        }
+    }
+
+    task("debugJarName") {
+        doLast {
+            println jar.getArchiveFileName()
+        }
+    }
+
+}
+
+
+project(':hadoop-yarn-applications') {
+
+    dependencies {
+//        implementation project(":hadoop-yarn-appmasters")
+        implementation(group: 'org.apache.hadoop', name: 'hadoop-client', version: hadoopVersion) {
+            exclude group: 'org.slf4j', module: 'slf4j-log4j12'
+        }
+        implementation(group: 'org.apache.hadoop', name: 'hadoop-yarn-common', version: hadoopVersion) {
+            exclude group: 'org.slf4j', module: 'slf4j-log4j12'
+        }
+        implementation(group: 'org.apache.hadoop', name: 'hadoop-yarn-client', version: hadoopVersion) {
+            exclude group: 'org.slf4j', module: 'slf4j-log4j12'
+        }
+        implementation group: 'com.jcraft', name: 'jsch', version: '0.1.55'
         testImplementation 'org.junit.jupiter:junit-jupiter-api:5.7.0'
         testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.7.0'
     }

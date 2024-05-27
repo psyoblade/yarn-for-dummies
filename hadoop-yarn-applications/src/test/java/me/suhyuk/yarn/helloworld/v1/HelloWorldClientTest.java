@@ -8,8 +8,8 @@ public class HelloWorldClientTest {
 
     @Test
     public void print_character_and_numeric() {
-        String str = "문자열";
+        String str = "characters";
         int i = 0;
-        assertTrue("문자열0".equals(str + i));
+        assertTrue("characters0".equals(str + i));
     }
 }
