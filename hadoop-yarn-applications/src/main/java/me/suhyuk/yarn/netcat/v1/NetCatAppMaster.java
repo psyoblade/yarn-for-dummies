@@ -170,7 +170,7 @@ public class NetCatAppMaster {
         ResourceUtils.reinitializeResources(amResponse.getResourceTypes());
         LOG.info("appMaster reinitialized resources");
 
-        // TODO: application 통해서 `nc -zvw10 datanode 9862` 명령어 수행
+        // TODO: application `nc -zvw10 datanode 9862`
         NMClient nmClient = NMClient.createNMClient();
         nmClient.init(conf);
         nmClient.start();
@@ -189,15 +189,12 @@ public class NetCatAppMaster {
             float incrementValue = Float.MIN_VALUE * increment++;
             progressIndicator = completedRatio + incrementValue;
             LOG.info(String.format("progress indicator %f, waiting containers %d", progressIndicator, waitingContainers));
-            AllocateResponse allocated = amrmClient.allocate(progressIndicator); // 왜 이런식으로 업데이트 해주는가?
+            AllocateResponse allocated = amrmClient.allocate(progressIndicator); // why like this ?
 
-            // 할당 받은 컨테이너 실행
-            for (Container container : allocated.getAllocatedContainers()) { // 현재 시점에 할당된 컨테이너 전체
-                waitingContainers -= 1; // 이 인덱스가 nodes[waitingContainers] 접근하여 노드 별 접근이 가능하다
+            for (Container container : allocated.getAllocatedContainers()) { // all allocated containers at now
+                waitingContainers -= 1; // indexes are used for accessing nodes[waitingContainers]
                 String hostname = nodes[waitingContainers];
                 ContainerLaunchContext ctx = Records.newRecord(ContainerLaunchContext.class);
-                // TODO: 모든 노드에서 특정 스크립트(check all target databases)를 수행
-                // TODO: 임의의 스크립트 결과가 현재 executor 로그로 출력이 되는지 확인이 필요함
 //                String commands = getNetCatApplicationCommands(hostname);
                 String commands = getJavaSshApplicationCommands(hostname);
                 ctx.setCommands(Collections.singletonList(commands));
@@ -213,7 +210,7 @@ public class NetCatAppMaster {
                 nmClient.startContainer(container, ctx);
             }
 
-            // 실행 중인 컨테이너의 상태 확인
+            // checking containers
             for (ContainerStatus status : allocated.getCompletedContainersStatuses()) {
                 LOG.info(String.format("Container '%s' exit status is '%d'", status.getContainerId().toString(), status.getExitStatus()));
                 if (status.getExitStatus() == ContainerExitStatus.SUCCESS) {
@@ -225,7 +222,7 @@ public class NetCatAppMaster {
                         status.getContainerId().toString(), success, failure, status.getExitStatus()));
             }
 
-            // 잠시 대기
+            // waiting
             try {
                 LOG.info("Application is Running... ");
                 TimeUnit.SECONDS.sleep(3);
@@ -261,9 +258,6 @@ public class NetCatAppMaster {
         }
     }
 
-    // TODO: 모든 node 정보를 추가하더라도 임의의 노드에 모든 작업이 기동된다 node 정보는 수행 가능한 노드를 지정하는 역할처럼 보인다
-    // TODO: 도커 환경에서 nodemanager 포트가 달라서 디버깅이 어렵다
-    // TODO: 노드에 하나씩만 익스큐터 띄우는 게 어려워서 노드 수 만큼 ssh 통해서 netcat 하는 방식 테스트
     private void assignForeachContainers(String[] nodes) throws IOException, YarnException {
         Resource capability = Records.newRecord(Resource.class);
         capability.setMemorySize(appMemory);

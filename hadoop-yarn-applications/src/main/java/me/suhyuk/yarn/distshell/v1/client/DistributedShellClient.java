@@ -42,7 +42,6 @@ public class DistributedShellClient {
     private static final int amMemory = 16;
     private static final int amVCores = 1;
 
-    // 로컬 리소스로 전달될 변수 및 파일명
     private String shellCommand = "";
     private static final String shellCommandPath = "shellCommands";
     private static final String shellArgsPath = "shellArgs";
@@ -72,18 +71,12 @@ public class DistributedShellClient {
         logger.info("yarnClient initialized");
     }
 
-    /**
-     * 클러스터의 리소스의 상태를 확인합니다
-     */
     public void checkClusterResources() {
         GetNewApplicationResponse appResponse = app.getNewApplicationResponse();
         Resource resource = appResponse.getMaximumResourceCapability();
         logger.info(resource.toString());
     }
 
-    /**
-     * 애플리케이션 제출을 위한 애플리케이션 아이디를 생성합니다
-     */
     public void createSubmissionContext() {
         appContext = app.getApplicationSubmissionContext();
         appId = appContext.getApplicationId();
@@ -92,8 +85,7 @@ public class DistributedShellClient {
     }
 
     /**
-     * 앱마스터에서 필요하지 않아 로컬리소스 사용하지 않는 경우는 하둡(/user/psyoblade/wordcount/application_1234/ExecScript)에 업로드
-     * 앱마스터가 실행할 애플리케이션 관련 정보를 환경변수에 저장합니다
+     * upload shell scripts (/user/psyoblade/wordcount/application_1234/ExecScript)
      */
     public void uploadShellScriptToHdfs() throws IOException {
         String hdfsShellScriptLocation = "";
@@ -116,7 +108,7 @@ public class DistributedShellClient {
     }
 
     /**
-     * 애플리케이션 수행시에 필요한 appMaster.jar, log4j.properties 및 shell 파일 등을 추가합니다
+     * add appMaster.jar, log4j.properties and shell file
      * @throws IOException
      */
     public void uploadLocalResources() throws IOException {
@@ -126,7 +118,7 @@ public class DistributedShellClient {
         String log4jPropSrc = "";
         addToLocalResources(fs, log4jPropSrc, log4jPath, appId.toString(), localResources, null);
 
-        if (!shellCommand.isEmpty()) { // 수행할 쉘 명령어를 별도의 파일로 저장합니다
+        if (!shellCommand.isEmpty()) {
             addToLocalResources(fs, null, shellCommandPath, appId.toString(), localResources, shellCommand);
         }
 
@@ -138,7 +130,7 @@ public class DistributedShellClient {
     }
 
     /**
-     * 애플리케이션 수행을 위해 전달할 모든 로컬 리소스를 localResources 추가
+     *
      * @param fs
      * @param fileSrcPath
      * @param fileDstPath
@@ -174,9 +166,8 @@ public class DistributedShellClient {
     }
 
     /**
-     * 앱마스터 Jar 위치를 클래스패스에 추가하고, 하둡 관련 클래스패스는 환경변수에 넣지 않고, 별도로 설정합니다
-     * CLASSPATH.$$ 통해서 크로스플랫폼 수행 시에도 환경변수에 문제가 없도록 구성합니다
-     * 즉, {{CLASSPATH}} 변수를 윈도우에서는 %CLASSPATH% 로 리눅스에서는 $CLASSPATH 로 변경합니다
+     * add classpath for app-master
+     * CLASSPATH.$$ means {{CLASSPATH}} for windows %CLASSPATH%, * for linux $CLASSPATH
      */
     public void setupApplicationClassPath() {
         StringBuilder classPathEnv = new StringBuilder(ApplicationConstants.Environment.CLASSPATH.$$())
@@ -191,7 +182,7 @@ public class DistributedShellClient {
     }
 
     /**
-     * ArrayList 대신 Vector 를 사용하고 있는데, 언제 동기적인 사용이 필요한가?
+     * why Vector other then ArrayList , need synchronized process?
      */
     public void setupApplicationMasterCommands() {
         String appMasterMainClass = "";
@@ -221,9 +212,6 @@ public class DistributedShellClient {
         commands.add(command.toString());
     }
 
-    /**
-     * 앱마스터 실행을 위한 컨테이너 런치 컨텍스트를 생성합니다
-     */
     public void createContainerLaunchContext() {
         amContainer = ContainerLaunchContext.newInstance(localResources, env, commands, null, null, null);
         Resource capability = Resource.newInstance(amMemory, amVCores);
@@ -255,9 +243,6 @@ public class DistributedShellClient {
         yarnClient.submitApplication(appContext);
     }
 
-    /**
-     * 애플리케이션이 종료될 때까지 대기합니다
-     */
     public void waitUntilFinished(int seconds) throws IOException, YarnException, InterruptedException {
         for (int i = 0; i < seconds; i++) {
             ApplicationReport report = yarnClient.getApplicationReport(appId);

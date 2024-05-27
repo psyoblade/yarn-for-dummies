@@ -58,9 +58,9 @@ public class HelloWorldClient {
     }
 
     /**
-     * yarnClient 를 통해서 수행할 작업을 submit 합니다
-     * - 실행을 위한 명령어 및 환경변수는 ApplicationSubmissionContext 객체에 담아서 전달하며
-     * - 실행에 필요한 파일은 하둡에 업로드하고
+     * submit using yarnClient
+     * - ApplicationSubmissionContext with environment
+     * - upload files to hdfs
      *
      * @throws IOException
      * @throws YarnException
@@ -134,7 +134,8 @@ public class HelloWorldClient {
     }
 
     /**
-     * 원본 파일이 없다면, 대상 경로만 생성하고, 있다면 로컬 파일을 원격지로 복사합니다
+     * create target directory if file is not exists
+     * if exists, copy local file to remote
      * @param fs
      * @param fileSrcPath
      * @param fileDstPath
