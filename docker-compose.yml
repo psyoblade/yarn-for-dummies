@@ -43,11 +43,35 @@ services:
 
   nodemanager1:
     image: bde2020/hadoop-nodemanager:2.0.0-hadoop3.2.1-java8
-    container_name: nodemanager
-    hostname: nodemanager
+    container_name: nodemanager1
+    hostname: nodemanager1
+    restart: always
+    ports:
+      - 8041:8042
+    environment:
+      SERVICE_PRECONDITION: "namenode:9000 namenode:9870 datanode:9864 resourcemanager:8088"
+    env_file:
+      - ./hadoop.env
+  
+  nodemanager2:
+    image: bde2020/hadoop-nodemanager:2.0.0-hadoop3.2.1-java8
+    container_name: nodemanager2
+    hostname: nodemanager2
     restart: always
     ports:
       - 8042:8042
+    environment:
+      SERVICE_PRECONDITION: "namenode:9000 namenode:9870 datanode:9864 resourcemanager:8088"
+    env_file:
+      - ./hadoop.env
+  
+  nodemanager3:
+    image: bde2020/hadoop-nodemanager:2.0.0-hadoop3.2.1-java8
+    container_name: nodemanager3
+    hostname: nodemanager3
+    restart: always
+    ports:
+      - 8043:8042
     environment:
       SERVICE_PRECONDITION: "namenode:9000 namenode:9870 datanode:9864 resourcemanager:8088"
     env_file:
