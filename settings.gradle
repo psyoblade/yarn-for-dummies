@@ -1,3 +1,4 @@
 rootProject.name = 'yarn-for-dummies'
+include 'hadoop-yarn-appmasters'
 include 'hadoop-yarn-applications'
 
