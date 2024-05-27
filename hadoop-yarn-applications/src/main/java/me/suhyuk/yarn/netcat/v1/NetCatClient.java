@@ -13,6 +13,7 @@ import org.apache.hadoop.yarn.client.api.YarnClient;
 import org.apache.hadoop.yarn.client.api.YarnClientApplication;
 import org.apache.hadoop.yarn.conf.YarnConfiguration;
 import org.apache.hadoop.yarn.exceptions.YarnException;
+import org.apache.hadoop.yarn.util.Records;
 import org.apache.log4j.Logger;
 
 import java.io.File;
@@ -25,7 +26,7 @@ import java.util.*;
 public class NetCatClient {
 
     private static final Logger LOG = Logger.getLogger(NetCatClient.class);
-    private static final String appName = "hadoop-yarn-applications-v1";
+    private static final String appName = "hadoop-yarn-applications";
 
     // am related settings
     private static final String amClassName = "me.suhyuk.yarn.netcat.v1.NetCatAppMaster";
@@ -41,7 +42,7 @@ public class NetCatClient {
     private ApplicationId applicationId;
 
     private String appMasterJar = "";
-    private String appMasterJarPath = "hadoop-yarn-applications.jar";
+    private String appMasterJarPath = appName + ".jar";
     private String log4jJar = "";
     private String log4jJarPath = "log4j.properties";
 

@@ -10,6 +10,7 @@ import org.apache.hadoop.yarn.api.protocolrecords.RegisterApplicationMasterRespo
 import org.apache.hadoop.yarn.api.records.*;
 import org.apache.hadoop.yarn.client.api.AMRMClient;
 import org.apache.hadoop.yarn.client.api.NMClient;
+import org.apache.hadoop.yarn.client.api.YarnClient;
 import org.apache.hadoop.yarn.conf.YarnConfiguration;
 import org.apache.hadoop.yarn.exceptions.YarnException;
 import org.apache.hadoop.yarn.util.Records;
@@ -35,6 +36,12 @@ public class NetCatAppMaster {
     private ApplicationId applicationId;
     private int success = 0;
     private int failure = 0;
+
+    // resource request
+    private static final int appMemory = 16;
+    private static final int appCores = 1;
+    private static final int appPriority = 0;
+    private static int totalContainers = 3;
 
     // user related
     private UserGroupInformation appSubmitterUgi;
@@ -116,25 +123,16 @@ public class NetCatAppMaster {
         nmClient.init(conf);
         nmClient.start();
 
-        Priority priority = Records.newRecord(Priority.class);
-        priority.setPriority(0);
-
-        Resource capability = Records.newRecord(Resource.class);
-        capability.setMemorySize(16);
-        capability.setVirtualCores(1);
-
-        int totalContainers = 3;
-        int waitingContainers = totalContainers; // total-num-of-containers = 2
+        int waitingContainers = totalContainers;
         int increment = 0;
         float progressIndicator = 0;
+        String[] nodes = getAllNodeManagerHosts();
+        int sizeOfNodes = nodes.length;
 
-        for (int i = 0; i < totalContainers; i++) {
-            AMRMClient.ContainerRequest containerAsk = new AMRMClient.ContainerRequest(capability, null, null, priority);
-            amrmClient.addContainerRequest(containerAsk);
-            LOG.info(String.format("container requested '%d'", i));
-        }
+//        assignRandomContainers();
+        assignForeachContainers(nodes);
 
-        int port = 9000;
+        int port = 80;
         while ((success + failure) < totalContainers) {
             float completedRatio = (float) (success + failure) / (float) totalContainers;
             float incrementValue = Float.MIN_VALUE * increment++;
@@ -144,10 +142,17 @@ public class NetCatAppMaster {
 
             // 할당 받은 컨테이너 실행
             for (Container container : allocated.getAllocatedContainers()) { // 현재 시점에 할당된 컨테이너 전체
+                waitingContainers -= 1; // 이 인덱스가 nodes[waitingContainers] 접근하여 노드 별 접근이 가능하다
+                String netCat = "/bin/nc -zvw10 namenode %d 1>%s/stdout 2>%s/stderr";
+                String hostname = nodes[waitingContainers];
                 ContainerLaunchContext ctx = Records.newRecord(ContainerLaunchContext.class);
 
+                // TODO: 모든 노드에서 특정 스크립트(check all target databases)를 수행
+                // TODO: 임의의 스크립트 결과가 현재 executor 로그로 출력이 되는지 확인이 필요함
+                String remoteNetCat = "ssh gfis@%s \"/bin/nc -zvw10 big-ingest-rc-001 %d\" 1>%s/stdout 2>%s/stderr";
                 String commands = String.format(
-                        "/bin/nc -zvw10 namenode %d 1>%s/stdout 2>%s/stderr",
+                        remoteNetCat,
+                        hostname,
                         port,
                         ApplicationConstants.LOG_DIR_EXPANSION_VAR,
                         ApplicationConstants.LOG_DIR_EXPANSION_VAR
@@ -155,8 +160,7 @@ public class NetCatAppMaster {
                 ctx.setCommands(Collections.singletonList(commands));
                 LOG.info(String.format("executing '%s'", commands));
                 nmClient.startContainer(container, ctx);
-                waitingContainers -= 1;
-                port += 1;
+//                port += 1; // for intentional error
             }
 
             // 실행 중인 컨테이너의 상태 확인
@@ -179,6 +183,65 @@ public class NetCatAppMaster {
                 message = "Application failed with interrupted exception " + e.getLocalizedMessage();
                 e.printStackTrace();
             }
+        }
+    }
+
+    private ResourceRequest getNodeRequest(String resourceName) {
+        ResourceRequest nodeRequest = Records.newRecord(ResourceRequest.class);
+        nodeRequest.setResourceName(resourceName);
+        nodeRequest.setCapability(Resource.newInstance(appMemory, appCores));
+        nodeRequest.setPriority(Priority.newInstance(appPriority));
+        nodeRequest.setNumContainers(1);
+        return nodeRequest;
+    }
+
+    private String[] getAllNodeManagerHosts() throws IOException, YarnException {
+        try (YarnClient yarnClient = YarnClient.createYarnClient()){
+            yarnClient.init(conf);
+            yarnClient.start();
+            List<NodeReport> nodeReports = yarnClient.getNodeReports(NodeState.RUNNING);
+            String[] hosts = nodeReports.stream().map(node -> node.getNodeId().getHost()).toArray(String[]::new);
+            for (String host : hosts) {
+                System.out.println("host = " + host);
+                LOG.info(String.format("host '%s' has found", host));
+            }
+            yarnClient.stop();
+            return hosts;
+        }
+    }
+
+    // TODO: 모든 node 정보를 추가하더라도 임의의 노드에 모든 작업이 기동된다 node 정보는 수행 가능한 노드를 지정하는 역할처럼 보인다
+    // TODO: 도커 환경에서 nodemanager 포트가 달라서 디버깅이 어렵다
+    // TODO: 노드에 하나씩만 익스큐터 띄우는 게 어려워서 노드 수 만큼 ssh 통해서 netcat 하는 방식 테스트
+    private void assignForeachContainers(String[] nodes) throws IOException, YarnException {
+        Resource capability = Records.newRecord(Resource.class);
+        capability.setMemorySize(appMemory);
+        capability.setVirtualCores(appCores);
+
+        Priority priority = Records.newRecord(Priority.class);
+        priority.setPriority(appPriority);
+
+        String[] racks = null;
+        boolean relaxLocality = false;
+        for (int i = 0; i < totalContainers; i++) {
+            AMRMClient.ContainerRequest containerAsk = new AMRMClient.ContainerRequest(capability, nodes, racks, priority, relaxLocality);
+            amrmClient.addContainerRequest(containerAsk);
+            LOG.info(String.format("add container with node '%s'", containerAsk));
+        }
+    }
+
+    private void assignRandomContainers() {
+        Priority priority = Records.newRecord(Priority.class);
+        priority.setPriority(appPriority);
+
+        Resource capability = Records.newRecord(Resource.class);
+        capability.setMemorySize(appMemory);
+        capability.setVirtualCores(appCores);
+
+        for (int i = 0; i < totalContainers; i++) {
+            AMRMClient.ContainerRequest containerAsk = new AMRMClient.ContainerRequest(capability, null, null, priority);
+            amrmClient.addContainerRequest(containerAsk);
+            LOG.info(String.format("container requested '%d'", i));
         }
     }
 
