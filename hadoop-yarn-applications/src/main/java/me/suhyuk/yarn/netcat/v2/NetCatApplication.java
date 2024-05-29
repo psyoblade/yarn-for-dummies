@@ -1,7 +1,8 @@
-package me.suhyuk.yarn.netcat.v1;
+package me.suhyuk.yarn.netcat.v2;
 
 import com.jcraft.jsch.JSch;
 import com.jcraft.jsch.Session;
+
 import java.util.Properties;
 
 public class NetCatApplication {
@@ -9,9 +10,9 @@ public class NetCatApplication {
         System.out.println("starting application");
         try {
             String username = args[0];
-            String hostname = args[1];
-            int port = Integer.parseInt(args[2]);
-            String password = args[3];
+            String password = args[1];
+            String hostname = args[2];
+            int port = Integer.parseInt(args[3]);
 
             JSch jsch = new JSch();
             System.out.println(String.format("creating session at %s/%s@%s:%d", username, password, hostname, port));
