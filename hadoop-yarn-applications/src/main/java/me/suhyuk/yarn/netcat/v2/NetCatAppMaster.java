@@ -1,4 +1,4 @@
-package me.suhyuk.yarn.netcat.v1;
+package me.suhyuk.yarn.netcat.v2;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
@@ -33,9 +33,9 @@ public class NetCatAppMaster {
     private static final String appName = "hadoop-yarn-applications";
     private static final Map<String, String> envs = System.getenv();
     private static final String CONTAINER_ID = Environment.CONTAINER_ID.name();
-    private static final String userName = "gfis"; // live:gfis, dev:root
-    private static final String password = "dpsTlqlrqmfh2403"; // live:dpsTlqlrqmfh2403, dev: null
-    private static final String port = "22"; // live:22, dev:8041
+    private static final String userName = "root"; // live:gfis, dev:root
+    private static final String password = "null"; // live:dpsTlqlrqmfh2403, dev: null
+    private static final String port = "8041"; // live:22, dev:8041
 
     // application related
     private Configuration conf;
@@ -46,7 +46,7 @@ public class NetCatAppMaster {
     private int failure = 0;
 
     // resource request
-    private static String appClassName = "me.suhyuk.yarn.netcat.v1.NetCatApplication";
+    private static String appClassName = "me.suhyuk.yarn.netcat.v2.NetCatApplication";
     private static final int appMemory = 16;
     private static final float appMemRatio = 0.7f;
     private static final int appMaxDirect = 5;
@@ -113,32 +113,19 @@ public class NetCatAppMaster {
             throw new RuntimeException(Environment.NM_PORT.name() + " not set in the environment");
     }
 
-    private String getJavaSshApplicationCommands(String username, String hostname, String port, String password) {
+    private String getJavaSshApplicationCommands(String username, String password, String hostname, String port) {
         Vector<CharSequence> vargs = new Vector<>(10);
         vargs.add(Environment.JAVA_HOME.$$() + "/bin/java");
         vargs.add("-Xmx" + (int) Math.ceil(appMemory * appMemRatio) + "m");
         vargs.add("-XX:MaxDirectMemorySize=" + appMaxDirect + "m");
         vargs.add(appClassName);
         vargs.add(username);
+        vargs.add(password);
         vargs.add(hostname);
         vargs.add(port);
-        vargs.add(password);
         vargs.add("1>" + ApplicationConstants.LOG_DIR_EXPANSION_VAR + "/Application.stdout");
         vargs.add("2>" + ApplicationConstants.LOG_DIR_EXPANSION_VAR + "/Application.stderr");
         return String.join(" ", vargs);
-    }
-
-    private String getNetCatApplicationCommands(String userName, String hostname, String port) {
-        String remoteNetCat = "ssh %s@%s '/bin/nc -zvw10 big-ingest-rc-001.cloud.ncsoft %s' 1>%s/stdout 2>%s/stderr";
-        String commands = String.format(
-                remoteNetCat,
-                userName,
-                hostname,
-                port,
-                ApplicationConstants.LOG_DIR_EXPANSION_VAR,
-                ApplicationConstants.LOG_DIR_EXPANSION_VAR
-        );
-        return commands;
     }
 
     private static LocalResource createLocalResource(Configuration conf, String resourcePath) throws IOException {
@@ -187,66 +174,83 @@ public class NetCatAppMaster {
         totalContainers = nodes.length;
         int waitingContainers = totalContainers;
 
-//        assignRandomContainers();
-        assignForeachContainers(nodes);
+        int result = 0;
+        // assign foreach container and execute job
+        for (String hostname : getAllNodeManagerHosts()) {
+            result = 0;
+            increment = 0;
+            assignSingleContainer(hostname);
 
-        while ((success + failure) < totalContainers) {
-            float completedRatio = (float) (success + failure) / (float) totalContainers;
-            float incrementValue = Float.MIN_VALUE * increment++;
-            progressIndicator = completedRatio + incrementValue;
-            LOG.info(String.format("progress indicator %f, waiting containers %d", progressIndicator, waitingContainers));
-            AllocateResponse allocated = amrmClient.allocate(progressIndicator); // why like this ?
+            // while running single container
+            while (result == 0) { // 0: ready, 1: success, 2: failure
+                AllocateResponse allocated = amrmClient.allocate(increment);
+                for (Container container : allocated.getAllocatedContainers()) { // all allocated containers at now
+                    ContainerLaunchContext context = Records.newRecord(ContainerLaunchContext.class);
+                    String commands = getJavaSshApplicationCommands(userName, password, hostname, port);
+                    context.setCommands(Collections.singletonList(commands));
+                    context.setEnvironment(envs);
+                    LOG.info(String.format("executing '%s'", commands));
 
-            for (Container container : allocated.getAllocatedContainers()) { // all allocated containers at now
-                waitingContainers -= 1; // indexes are used for accessing nodes[waitingContainers]
-                String hostName = nodes[waitingContainers];
-                ContainerLaunchContext context = Records.newRecord(ContainerLaunchContext.class);
-//                String commands = getNetCatApplicationCommands(userName, hostname, port);
-                String commands = getJavaSshApplicationCommands(userName, hostName, port, password);
-                context.setCommands(Collections.singletonList(commands));
-                context.setEnvironment(envs);
-                LOG.info(String.format("executing '%s'", commands));
+                    // add client.jar to local resource
+                    Map<String, LocalResource> localResources = new HashMap<>();
+                    String resourcePath = String.format("/user/%s/hadoop-yarn-applications/%s/%s.jar", userName, applicationId, appName);
+                    localResources.put("app.jar", createLocalResource(conf, resourcePath));
+                    context.setLocalResources(localResources);
 
-                // add client.jar to local resource
-                Map<String, LocalResource> localResources = new HashMap<>();
-                String resourcePath = String.format("/user/%s/hadoop-yarn-applications/%s/%s.jar", userName, applicationId, appName);
-                localResources.put("app.jar", createLocalResource(conf, resourcePath));
-                context.setLocalResources(localResources);
-
-                nmClient.startContainer(container, context);
-            }
-
-            // checking containers
-            for (ContainerStatus status : allocated.getCompletedContainersStatuses()) {
-                LOG.info(String.format("Container '%s' exit status is '%d'", status.getContainerId().toString(), status.getExitStatus()));
-                if (status.getExitStatus() == ContainerExitStatus.SUCCESS) {
-                    success += 1;
-                } else {
-                    failure += 1;
+                    nmClient.startContainer(container, context);
                 }
-                LOG.info(String.format("status of container '%s' - success : %d, failure: %d with exit status %d",
-                        status.getContainerId().toString(), success, failure, status.getExitStatus()));
+
+                // checking acquired containers and release
+                for (ContainerStatus status : allocated.getCompletedContainersStatuses()) {
+                    LOG.info(String.format("Container '%s' exit status is '%d'", status.getContainerId().toString(), status.getExitStatus()));
+                    if (status.getExitStatus() == ContainerExitStatus.SUCCESS) {
+                        success += 1;
+                        result = 1;
+                    } else {
+                        failure += 1;
+                        result = 2;
+                    }
+                    LOG.info(String.format("status of container '%s' - success : %d, failure: %d with exit status %d",
+                            status.getContainerId().toString(), success, failure, status.getExitStatus()));
+
+                    releaseUsedContainer(status.getContainerId());
+                }
+
+                // waiting 3 seconds
+                try {
+                    LOG.info("Application is Running... ");
+                    TimeUnit.SECONDS.sleep(3);
+                } catch (InterruptedException e) {
+                    appStatus = FinalApplicationStatus.FAILED;
+                    message = "Application failed with interrupted exception " + e.getLocalizedMessage();
+                    e.printStackTrace();
+                }
+                increment += 1;
             }
 
-            // waiting
-            try {
-                LOG.info("Application is Running... ");
-                TimeUnit.SECONDS.sleep(3);
-            } catch (InterruptedException e) {
-                appStatus = FinalApplicationStatus.FAILED;
-                message = "Application failed with interrupted exception " + e.getLocalizedMessage();
-                e.printStackTrace();
-            }
         }
+
     }
 
-    private ResourceRequest getNodeRequest(String resourceName) {
-        ResourceRequest nodeRequest = Records.newRecord(ResourceRequest.class);
-        nodeRequest.setResourceName(resourceName);
-        nodeRequest.setCapability(Resource.newInstance(appMemory, appCores));
-        nodeRequest.setPriority(Priority.newInstance(appPriority));
-        nodeRequest.setNumContainers(1);
-        return nodeRequest;
+    private void releaseUsedContainer(ContainerId containerId) {
+        amrmClient.releaseAssignedContainer(containerId);
+        LOG.info(String.format("Acquired container %s has released.", containerId.toString()));
+    }
+
+    private void assignSingleContainer(String node) {
+        Resource capability = Records.newRecord(Resource.class);
+        capability.setMemorySize(appMemory);
+        capability.setVirtualCores(appCores);
+
+        Priority priority = Records.newRecord(Priority.class);
+        priority.setPriority(appPriority);
+
+        String[] racks = null;
+        String[] nodes = { node };
+        boolean relaxLocality = false;
+        AMRMClient.ContainerRequest containerAsk = new AMRMClient.ContainerRequest(capability, nodes, racks, priority, relaxLocality);
+        amrmClient.addContainerRequest(containerAsk);
+        LOG.info(String.format("add container with node '%s'", containerAsk));
     }
 
     private String[] getAllNodeManagerHosts() throws IOException, YarnException {
@@ -278,21 +282,6 @@ public class NetCatAppMaster {
             AMRMClient.ContainerRequest containerAsk = new AMRMClient.ContainerRequest(capability, nodes, racks, priority, relaxLocality);
             amrmClient.addContainerRequest(containerAsk);
             LOG.info(String.format("add container with node '%s'", containerAsk));
-        }
-    }
-
-    private void assignRandomContainers() {
-        Priority priority = Records.newRecord(Priority.class);
-        priority.setPriority(appPriority);
-
-        Resource capability = Records.newRecord(Resource.class);
-        capability.setMemorySize(appMemory);
-        capability.setVirtualCores(appCores);
-
-        for (int i = 0; i < totalContainers; i++) {
-            AMRMClient.ContainerRequest containerAsk = new AMRMClient.ContainerRequest(capability, null, null, priority);
-            amrmClient.addContainerRequest(containerAsk);
-            LOG.info(String.format("container requested '%d'", i));
         }
     }
 

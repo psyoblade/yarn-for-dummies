@@ -7,8 +7,8 @@ ext {
     projectName = 'hadoop-yarn-applications'
     projectVersion = 'v1'
 
-    sourceCompatibility = '1.8'
-    targetCompatibility = '1.8'
+    sourceCompatibility = '11'
+    targetCompatibility = '11'
 
     hadoopVersion = '3.1.2'
 }
@@ -47,16 +47,6 @@ project(':hadoop-yarn-appmasters') {
         testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.7.0'
     }
 
-    jar {
-        duplicatesStrategy = DuplicatesStrategy.INCLUDE
-        manifest {
-            attributes "Main-Class": "me.suhyuk.yarn.netcat.v1.NetCatClient"
-        }
-        from {
-            configurations.compileClasspath.collect { it.isDirectory() ? it : zipTree(it) }
-        }
-    }
-
     task("debugJarName") {
         doLast {
             println jar.getArchiveFileName()
@@ -80,6 +70,8 @@ project(':hadoop-yarn-applications') {
             exclude group: 'org.slf4j', module: 'slf4j-log4j12'
         }
         implementation group: 'com.jcraft', name: 'jsch', version: '0.1.55'
+        implementation group: 'com.sshtools', name: 'maverick-synergy-client', version: '3.1.1'
+
         testImplementation 'org.junit.jupiter:junit-jupiter-api:5.7.0'
         testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.7.0'
     }
@@ -88,7 +80,7 @@ project(':hadoop-yarn-applications') {
         duplicatesStrategy = DuplicatesStrategy.INCLUDE
         manifest {
 //            attributes "Main-Class": "me.suhyuk.yarn.helloworld.v1.HelloWorld"
-            attributes "Main-Class": "me.suhyuk.yarn.netcat.v1.NetCatClient"
+            attributes "Main-Class": "me.suhyuk.yarn.netcat.v2.NetCatClient"
         }
         from {
             configurations.compileClasspath.collect { it.isDirectory() ? it : zipTree(it) }
