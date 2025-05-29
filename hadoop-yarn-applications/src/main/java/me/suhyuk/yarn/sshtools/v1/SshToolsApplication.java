@@ -31,7 +31,7 @@ public class SshToolsApplication {
                 .withHostname(sourceHost)
                 .withPort(sourcePort)
                 .withUsername("gfis")
-                .withPassword("dpsTlqlrqmfh2402")
+                .withPassword("****")
                 .build()
         ) {
 //            ssh.putFile(new File("package.deb"));
